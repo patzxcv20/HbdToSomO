@@ -20,7 +20,7 @@ if "thread_id" not in st.session_state:
     st.session_state.thread_id = thread.id
 
 # Title
-st.title("HBD SomO!")
+st.title("!")
 
 # Display messages in chat history
 for message in st.session_state.chat_history:
