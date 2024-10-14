@@ -1,63 +1,79 @@
 import streamlit as st
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_openai import ChatOpenAI
-from dotenv import load_dotenv
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from openai import OpenAI
+from openai.types.beta.assistant_stream_event import ThreadMessageDelta
+from openai.types.beta.threads.text_delta_block import TextDeltaBlock 
 
+OPENAI_API_KEY="sk-_doiNtTErCu4LSslNMzPkPFaprBRAd6hddHAdWf5cST3BlbkFJP1VdkfhIov7ZMVGAOlVSMVg9jcbFmuY8Hpug7bBbQA"
+ASSISTANT_ID="asst_cQuf9u2IOCqrVkRrsL91ecnh"
 
-load_dotenv()
+# Initialise the OpenAI client, and retrieve the assistant
+client = OpenAI(api_key=OPENAI_API_KEY)
+assistant = client.beta.assistants.retrieve(assistant_id=ASSISTANT_ID)
 
-# app config
-st.set_page_config(page_title="Streaming bot", page_icon="🤖")
-st.title("Streaming bot")
-
-def get_response(user_query, chat_history):
-
-    template = """
-    You are a helpful assistant. Answer the following questions considering the history of the conversation:
-
-    Chat history: {chat_history}
-
-    User question: {user_question}
-    """
-
-    prompt = ChatPromptTemplate.from_template(template)
-
-    llm = ChatOpenAI()
-        
-    chain = prompt | llm | StrOutputParser()
-    
-    return chain.stream({
-        "chat_history": chat_history,
-        "user_question": user_query,
-    })
-
-# session state
+# Initialise session state to store conversation history locally to display on UI
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [
-        AIMessage(content="Hello, I am a bot. How can I help you?"),
-    ]
+    st.session_state.chat_history = []
 
-    
-# conversation
+# Create a new thread if it does not exist
+if "thread_id" not in st.session_state:
+    thread = client.beta.threads.create()
+    st.session_state.thread_id = thread.id
+
+# Title
+st.title("HBD SomO!")
+
+# Display messages in chat history
 for message in st.session_state.chat_history:
-    if isinstance(message, AIMessage):
-        with st.chat_message("AI"):
-            st.write(message.content)
-    elif isinstance(message, HumanMessage):
-        with st.chat_message("Human"):
-            st.write(message.content)
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# user input
-user_query = st.chat_input("Type your message here...")
-if user_query is not None and user_query != "":
-    st.session_state.chat_history.append(HumanMessage(content=user_query))
+# Textbox and streaming process
+if user_query := st.chat_input("Ask me a question"):
 
-    with st.chat_message("Human"):
+    # Display the user's query
+    with st.chat_message("user"):
         st.markdown(user_query)
 
-    with st.chat_message("AI"):
-        response = st.write_stream(get_response(user_query, st.session_state.chat_history))
+    # Store the user's query into the history
+    st.session_state.chat_history.append({"role": "user",
+                                          "content": user_query})
+    
+    # Add user query to the thread
+    client.beta.threads.messages.create(
+        thread_id=st.session_state.thread_id,
+        role="user",
+        content=user_query
+        )
 
-    st.session_state.chat_history.append(AIMessage(content=response))
+    # Stream the assistant's reply
+    with st.chat_message("assistant"):
+        stream = client.beta.threads.runs.create(
+            thread_id=st.session_state.thread_id,
+            assistant_id=ASSISTANT_ID,
+            stream=True
+            )
+        
+        # Empty container to display the assistant's reply
+        assistant_reply_box = st.empty()
+        
+        # A blank string to store the assistant's reply
+        assistant_reply = ""
+
+        # Iterate through the stream 
+        for event in stream:
+            # There are various types of streaming events
+            # See here: https://platform.openai.com/docs/api-reference/assistants-streaming/events
+
+            # Here, we only consider if there's a delta text
+            if isinstance(event, ThreadMessageDelta):
+                if isinstance(event.data.delta.content[0], TextDeltaBlock):
+                    # empty the container
+                    assistant_reply_box.empty()
+                    # add the new text
+                    assistant_reply += event.data.delta.content[0].text.value
+                    # display the new text
+                    assistant_reply_box.markdown(assistant_reply)
+        
+        # Once the stream is over, update chat history
+        st.session_state.chat_history.append({"role": "assistant",
+                                              "content": assistant_reply})
