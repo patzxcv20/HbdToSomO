@@ -35,18 +35,22 @@ st.set_page_config(page_title="HBDSomO!", page_icon="🤖")
 st.title("Happy 22nd Birthday, SomO! 🎉")
 
 # Display a welcome image
-st.image('Welcome.gif', caption='Wish you live a happy life krub, Hurry back!', use_column_width=True)
+st.image('Welcome.gif', caption='Wish you live a happy life krub. I miss u, Hurry back!', use_column_width=True)
 
 # Display messages in chat history
 for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    if message["role"] == "user":
+        with st.chat_message("user", avatar="SomO.jpg"):
+            st.markdown(message["content"])
+    elif message["role"] == "assistant":
+        with st.chat_message("user", avatar="Mac.jpg"):
+            st.markdown(message["content"])
 
 # Textbox and streaming process
 if user_query := st.chat_input("Don't ask me difficult questions 🥲"):
 
     # Display the user's query
-    with st.chat_message("user"):
+    with st.chat_message("user",avatar="SomO.jpg"):
         st.markdown(user_query)
 
     # Store the user's query into the history
@@ -72,7 +76,6 @@ if user_query := st.chat_input("Don't ask me difficult questions 🥲"):
         
         # Empty container to display the assistant's reply
         assistant_reply_box = st.empty()
-        
         # A blank string to store the assistant's reply
         assistant_reply = ""
 
